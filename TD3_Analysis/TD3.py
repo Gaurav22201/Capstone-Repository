@@ -1,4 +1,4 @@
-from utils import Actor, Critic
+from TD3_Analysis.utils import Actor, Critic
 import torch.nn.functional as F
 import numpy as np
 import torch

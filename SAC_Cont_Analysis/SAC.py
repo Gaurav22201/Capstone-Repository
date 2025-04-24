@@ -97,17 +97,17 @@ class SAC_agent:
         # Update critics
         with torch.no_grad():
             next_action, next_log_pi = self.actor.sample(next_state)
-            target_Q1 = self.critic1_target(next_state, next_action)[0]
-            target_Q2 = self.critic2_target(next_state, next_action)[0]
+            target_Q1 = self.critic1_target(next_state, next_action)
+            target_Q2 = self.critic2_target(next_state, next_action)
             target_Q = torch.min(target_Q1, target_Q2)
             target_Q = reward + (~done) * self.gamma * (target_Q - self.alpha * next_log_pi)
         
         # Critic 1 loss
-        current_Q1 = self.critic1(state, action)[0]
+        current_Q1 = self.critic1(state, action)
         critic1_loss = F.mse_loss(current_Q1, target_Q)
         
         # Critic 2 loss
-        current_Q2 = self.critic2(state, action)[0]
+        current_Q2 = self.critic2(state, action)
         critic2_loss = F.mse_loss(current_Q2, target_Q)
         
         # Update critics
@@ -121,8 +121,8 @@ class SAC_agent:
         
         # Update actor
         action_pi, log_pi = self.actor.sample(state)
-        Q1_pi = self.critic1(state, action_pi)[0]
-        Q2_pi = self.critic2(state, action_pi)[0]
+        Q1_pi = self.critic1(state, action_pi)
+        Q2_pi = self.critic2(state, action_pi)
         Q_pi = torch.min(Q1_pi, Q2_pi)
         
         actor_loss = (self.alpha * log_pi - Q_pi).mean()
