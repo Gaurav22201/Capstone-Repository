@@ -26,9 +26,9 @@ class Actor(nn.Module):
         return a
 
 
-class Q_Critic(nn.Module):
+class Critic(nn.Module):
     def __init__(self, state_dim, action_dim, net_width):
-        super(Q_Critic, self).__init__()
+        super(Critic, self).__init__()
 
         self.l1 = nn.Linear(state_dim + action_dim, net_width)
         self.l2 = nn.Linear(net_width, net_width)
@@ -46,6 +46,33 @@ class Q_Critic(nn.Module):
         q = F.relu(self.ln3(self.l3(q)))
         q = self.l4(q)
         return q
+
+class ReplayBuffer:
+    def __init__(self, state_dim, action_dim, max_size, dvc):
+        self.max_size = max_size
+        self.dvc = dvc
+        self.ptr = 0
+        self.size = 0
+
+        self.s = torch.zeros((max_size, state_dim), dtype=torch.float, device=self.dvc)
+        self.a = torch.zeros((max_size, action_dim), dtype=torch.float, device=self.dvc)
+        self.r = torch.zeros((max_size, 1), dtype=torch.float, device=self.dvc)
+        self.s_next = torch.zeros((max_size, state_dim), dtype=torch.float, device=self.dvc)
+        self.dw = torch.zeros((max_size, 1), dtype=torch.bool, device=self.dvc)
+
+    def add(self, s, a, r, s_next, dw):
+        self.s[self.ptr] = torch.from_numpy(s).to(self.dvc)
+        self.a[self.ptr] = torch.from_numpy(a).to(self.dvc)
+        self.r[self.ptr] = torch.tensor([[float(r)]], dtype=torch.float, device=self.dvc)
+        self.s_next[self.ptr] = torch.from_numpy(s_next).to(self.dvc)
+        self.dw[self.ptr] = bool(dw)
+
+        self.ptr = (self.ptr + 1) % self.max_size
+        self.size = min(self.size + 1, self.max_size)
+
+    def sample(self, batch_size):
+        ind = torch.randint(0, self.size, device=self.dvc, size=(batch_size,))
+        return self.s[ind], self.a[ind], self.r[ind], self.s_next[ind], self.dw[ind]
 
 def evaluate_policy(env, agent, turns = 3):
     total_scores = 0

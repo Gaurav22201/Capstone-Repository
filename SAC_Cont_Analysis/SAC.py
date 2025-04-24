@@ -3,6 +3,8 @@ import torch.nn.functional as F
 import torch.nn as nn
 import numpy as np
 import copy
+import os, sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils import Actor, Critic, ReplayBuffer
 
 LOG_STD_MIN = -20

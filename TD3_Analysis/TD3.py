@@ -106,9 +106,9 @@ class ReplayBuffer():
     def add(self, s, a, r, s_next, terminated):
         self.s[self.ptr] = torch.from_numpy(s).to(self.dvc)
         self.a[self.ptr] = torch.from_numpy(a).to(self.dvc)
-        self.r[self.ptr] = r
+        self.r[self.ptr] = torch.tensor([[float(r)]], dtype=torch.float, device=self.dvc)
         self.s_next[self.ptr] = torch.from_numpy(s_next).to(self.dvc)
-        self.dw[self.ptr] = terminated
+        self.dw[self.ptr] = bool(terminated)
 
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)

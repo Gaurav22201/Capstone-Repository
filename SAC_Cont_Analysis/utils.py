@@ -30,7 +30,6 @@ class Critic(nn.Module):
     def __init__(self, state_dim, action_dim, net_width):
         super(Critic, self).__init__()
 
-        # Q1 architecture
         self.l1 = nn.Linear(state_dim + action_dim, net_width)
         self.l2 = nn.Linear(net_width, net_width)
         self.l3 = nn.Linear(net_width, net_width // 2)
@@ -42,22 +41,11 @@ class Critic(nn.Module):
 
     def forward(self, state, action):
         sa = torch.cat([state, action], 1)
-        
-        # Q1
-        q1 = F.relu(self.ln1(self.l1(sa)))
-        q1 = F.relu(self.ln2(self.l2(q1)))
-        q1 = F.relu(self.ln3(self.l3(q1)))
-        q1 = self.l4(q1)
-        
-        return q1, None  # Return None as second output for compatibility
-
-    def Q1(self, state, action):
-        sa = torch.cat([state, action], 1)
-        q1 = F.relu(self.ln1(self.l1(sa)))
-        q1 = F.relu(self.ln2(self.l2(q1)))
-        q1 = F.relu(self.ln3(self.l3(q1)))
-        q1 = self.l4(q1)
-        return q1
+        q = F.relu(self.ln1(self.l1(sa)))
+        q = F.relu(self.ln2(self.l2(q)))
+        q = F.relu(self.ln3(self.l3(q)))
+        q = self.l4(q)
+        return q
 
 class ReplayBuffer:
     def __init__(self, state_dim, action_dim, max_size, dvc):
@@ -72,12 +60,12 @@ class ReplayBuffer:
         self.s_next = torch.zeros((max_size, state_dim), dtype=torch.float, device=self.dvc)
         self.dw = torch.zeros((max_size, 1), dtype=torch.bool, device=self.dvc)
 
-    def add(self, s, a, r, s_next, terminated):
+    def add(self, s, a, r, s_next, dw):
         self.s[self.ptr] = torch.from_numpy(s).to(self.dvc)
         self.a[self.ptr] = torch.from_numpy(a).to(self.dvc)
-        self.r[self.ptr] = r
+        self.r[self.ptr] = torch.tensor([[float(r)]], dtype=torch.float, device=self.dvc)
         self.s_next[self.ptr] = torch.from_numpy(s_next).to(self.dvc)
-        self.dw[self.ptr] = terminated
+        self.dw[self.ptr] = bool(dw)
 
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
@@ -94,8 +82,9 @@ def evaluate_policy(env, agent, turns = 3):
         while not done:
             # Take deterministic actions at test time
             a = agent.select_action(s, deterministic=True)
-            s_next, r, terminated, truncated, info = env.step(a)
-            done = terminated or truncated
+            s_next, r, dw, tr, info = env.step(a)
+            done = (dw or tr)
+
             total_scores += r
             s = s_next
     return int(total_scores/turns)
