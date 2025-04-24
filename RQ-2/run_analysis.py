@@ -30,16 +30,16 @@ from SAC_Cont_Analysis.SAC import SAC_agent
 # Constants
 ENVS = ['Pendulum-v1', 'BipedalWalker-v3']
 ALGORITHMS = ['PPO', 'DDPG', 'TD3', 'SAC']
-MAX_STEPS = 200_000  # Extended to 200k steps for slope calculation
-EVAL_INTERVAL = 1000  # More frequent evaluation
-INCREMENTAL_INTERVAL = 10_000  # For incremental reward tracking
+MAX_STEPS = 20_000  # Reduced for faster experiments
+EVAL_INTERVAL = 50  # More frequent evaluation for shorter runs
+INCREMENTAL_INTERVAL = 500  # Reduced for shorter runs
 LOG_DIR = 'logs'
 PLOT_DIR = 'plots'
 
 # Performance thresholds for each environment
 PERFORMANCE_THRESHOLDS = {
-    'Pendulum-v1': -200,  # Adjusted based on environment
-    'BipedalWalker-v3': 300  # Adjusted based on environment
+    'Pendulum-v1': -800,  # Adjusted for shorter training
+    'BipedalWalker-v3': 15  # Adjusted for shorter training
 }
 
 def get_system_metrics():
@@ -93,17 +93,27 @@ def evaluate_policy(env, agent, eval_episodes=10):
 
 def calculate_learning_slope(rewards, start_step=100_000, end_step=200_000):
     """Calculate the learning curve slope between specified timesteps."""
+    if len(rewards) == 0:
+        return 0.0
+        
+    # Convert to numpy arrays for calculation
+    rewards = np.array(rewards)
+    steps = np.arange(len(rewards)) * EVAL_INTERVAL  # Convert indices to actual steps
+    
     # Get indices for the range we want
     start_idx = start_step // EVAL_INTERVAL
-    end_idx = end_step // EVAL_INTERVAL
+    end_idx = min(end_step // EVAL_INTERVAL, len(rewards))
     
     # Get rewards between start_step and end_step
-    rewards = rewards[start_idx:end_idx]
-    steps = np.arange(start_step, end_step, EVAL_INTERVAL)[:len(rewards)]
+    if start_idx >= end_idx or start_idx >= len(rewards):
+        return 0.0
+        
+    rewards_slice = rewards[start_idx:end_idx]
+    steps_slice = steps[start_idx:end_idx]
     
     # Calculate slope using linear regression
-    if len(steps) > 0 and len(rewards) > 0:
-        slope, _, _, _, _ = stats.linregress(steps, rewards)
+    if len(steps_slice) > 1 and len(rewards_slice) > 1:
+        slope, _, _, _, _ = stats.linregress(steps_slice, rewards_slice)
         return slope
     return 0.0
 
@@ -201,12 +211,23 @@ def run_experiment(algo_name, env_name):
     metrics['incremental_reward'] = incremental_rewards
     
     # Create DataFrame only for step-based metrics
+    # Ensure all arrays have the same length by padding incremental rewards if needed
+    n_steps = len(metrics['step'])
+    if len(incremental_rewards) < n_steps:
+        # Pad with None or the last value to match length
+        padding = [None] * (n_steps - len(incremental_rewards))
+        incremental_rewards.extend(padding)
+    elif len(incremental_rewards) > n_steps:
+        # Truncate to match length
+        incremental_rewards = incremental_rewards[:n_steps]
+    
     df = pd.DataFrame({
         'step': metrics['step'],
         'episode_reward': metrics['episode_reward'],
         'algorithm': metrics['algorithm'],
         'environment': metrics['environment'],
-        'incremental_reward': metrics['incremental_reward']
+        'incremental_reward': incremental_rewards,
+        'threshold_reached': [metrics['threshold_reached']] * len(metrics['step'])  # Add threshold_reached column
     })
     
     # Save metrics to CSV
@@ -281,8 +302,10 @@ def analyze_results():
             algo_data = data[(data['environment'] == env_name) & 
                            (data['algorithm'] == algo_name)]
             if not algo_data.empty:
-                rewards = algo_data.groupby('step')['episode_reward'].mean()
-                slope = calculate_learning_slope(rewards.values)
+                # Calculate slope using the episode rewards
+                rewards = algo_data['episode_reward'].values
+                slope = calculate_learning_slope(rewards)
+                print(f"Calculated slope for {algo_name} on {env_name}: {slope}")  # Debug print
                 slope_data.append({
                     'Environment': env_name,
                     'Algorithm': algo_name,
@@ -290,11 +313,18 @@ def analyze_results():
                 })
     
     slope_df = pd.DataFrame(slope_data)
-    sns.barplot(data=slope_df, x='Algorithm', y='Slope', hue='Environment')
-    plt.title('Learning Curve Slope Analysis (100k-200k timesteps)')
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.savefig(f'{PLOT_DIR}/learning_slopes.png')
+    if not slope_df.empty:  # Only plot if we have data
+        plt.figure(figsize=(12, 6))
+        sns.barplot(data=slope_df, x='Algorithm', y='Slope', hue='Environment')
+        plt.title('Learning Curve Slope Analysis (100k-200k timesteps)')
+        plt.xticks(rotation=45)
+        plt.ylabel('Learning Rate (reward/timestep)')
+        plt.tight_layout()
+        plt.savefig(f'{PLOT_DIR}/learning_slopes.png')
+        print("Slope data:")
+        print(slope_df)
+    else:
+        print("Warning: No slope data available for plotting")
     plt.close()
     
     # 4. Time to Threshold Analysis
@@ -305,7 +335,10 @@ def analyze_results():
             algo_data = data[(data['environment'] == env_name) & 
                            (data['algorithm'] == algo_name)]
             if not algo_data.empty:
-                threshold_steps = algo_data['threshold_reached'].iloc[0]  # Just take the first value since no seeds
+                # Get threshold value, default to MAX_STEPS if threshold wasn't reached
+                threshold_steps = algo_data['threshold_reached'].iloc[0]
+                if pd.isna(threshold_steps):  # If threshold wasn't reached
+                    threshold_steps = MAX_STEPS
                 threshold_data.append({
                     'Environment': env_name,
                     'Algorithm': algo_name,
