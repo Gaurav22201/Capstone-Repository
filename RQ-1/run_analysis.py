@@ -27,10 +27,10 @@ from TD3_Analysis.TD3 import TD3_agent
 from SAC_Cont_Analysis.SAC import SAC_agent
 
 # Constants
-SEEDS = list(range(2))  # Just 2 seeds for testing
+SEEDS = list(range(10))  # Just 2 seeds for testing
 ENVS = ['Pendulum-v1', 'BipedalWalker-v3']  # Using BipedalWalker instead of HalfCheetah
 ALGORITHMS = ['PPO', 'DDPG', 'TD3', 'SAC']
-MAX_STEPS = 10_000  # Reduced steps for testing
+MAX_STEPS = 100_000  # Reduced steps for testing
 EVAL_INTERVAL = 1000
 LOG_DIR = 'logs'
 PLOT_DIR = 'plots'
