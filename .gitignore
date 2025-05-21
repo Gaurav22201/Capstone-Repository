@@ -1,0 +1,4 @@
+CapstoneProject/venv/
+CapstoneProject/.idea/
+__pycache__/
+*.pyc
